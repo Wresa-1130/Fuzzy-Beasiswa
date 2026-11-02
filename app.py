@@ -98,15 +98,13 @@ st.title("🎓 SPK Kelayakan Penerima Beasiswa")
 st.caption("Logika Fuzzy metode Mamdani · AND = MIN · implikasi = MIN · agregasi = MAX · "
            "defuzzifikasi centroid (grid 0,5)")
 
-tab1, tab2, tab3, tab4 = st.tabs(["Hasil", "Fungsi keanggotaan", "Basis aturan", "Tentang"])
+tab1, tab2, tab3 = st.tabs(["Hasil", "Fungsi keanggotaan", "Basis aturan"])
 
 with tab1:
     c1, c2, c3 = st.columns(3)
     c1.metric("Skor kelayakan", f"{hasil['skor']:.2f}")
     c2.metric("Rekomendasi", hasil["label"])
     c3.metric("Aturan aktif", f"{sum(a > 0 for a in hasil['alpha'])} dari {len(fz.RULES)}")
-    st.info("Skor adalah rekomendasi pendukung keputusan, bukan keputusan final. "
-            "Keputusan akhir tetap pada panitia.")
 
     st.subheader("1. Fuzzifikasi")
     baris = []
@@ -170,16 +168,3 @@ with tab3:
     df_r = pd.DataFrame(fz.RULES).rename(columns={"no": "No", "poin": "Poin", "out": "Kelayakan"})
     df_r["Aktif (α>0)"] = [round(a, 4) if a > 0 else None for a in hasil["alpha"]]
     tampil(df_r, height=500)
-
-with tab4:
-    st.markdown(
-        """
-**Tahapan Mamdani**: fuzzifikasi → evaluasi aturan (AND = MIN) → implikasi (MIN) dan agregasi (MAX)
-→ defuzzifikasi centroid pada grid z = 0; 0,5; …; 100.
-
-**Keterbatasan**
-- Parameter fungsi keanggotaan, bobot poin, dan ambang adalah asumsi, bukan data resmi pemberi beasiswa.
-- Skor praktis berkisar sekitar 13–87 karena centroid himpunan bahu tidak mencapai 0 atau 100.
-- Sistem hanya rekomendasi; verifikasi dokumen dan pertimbangan kasus khusus tetap oleh manusia.
-        """
-    )
