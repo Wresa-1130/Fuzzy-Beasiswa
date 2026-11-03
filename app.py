@@ -26,6 +26,46 @@ def tampil(df, **kw):
         st.dataframe(df, hide_index=True, use_container_width=True, **kw)
 
 
+def gambar(fig):
+    """Tampilkan lalu tutup figure agar memori tidak bocor."""
+    st.pyplot(fig)
+    plt.close(fig)
+
+
+def angka(v):
+    return f"{v:g}"
+
+
+def persamaan(tipe, p):
+    """Persamaan LaTeX fungsi keanggotaan dari parameternya."""
+    a, b, c, d = (p[0], p[1], p[1], p[2]) if tipe == "tri" else p
+    baris = []
+    if a < b:
+        baris.append(rf"\frac{{x-{angka(a)}}}{{{angka(b - a)}}} & {angka(a)} \le x < {angka(b)}")
+    baris.append(rf"1 & x = {angka(b)}" if b == c else rf"1 & {angka(b)} \le x \le {angka(c)}")
+    if c < d:
+        baris.append(rf"\frac{{{angka(d)}-x}}{{{angka(d - c)}}} & {angka(c)} < x \le {angka(d)}")
+    baris.append(r"0 & \text{lainnya}")
+    return r"\mu(x)=\begin{cases}" + r" \\ ".join(baris) + r"\end{cases}"
+
+
+@st.cache_data
+def data_pengujian():
+    return fz.jalankan_pengujian(), fz.cek_coverage()
+
+
+@st.cache_data
+def data_validasi():
+    baris = []
+    for k in ["M01", "M05", "M10", "M12", "M16"]:
+        d = next(t for t in fz.DATA if t[0] == k)
+        prog = fz.infer(*d[1:5])["skor"]
+        man, _ = fz.hitung_manual(*d[1:5])
+        baris.append({"ID": k, "Program (grid 0,5)": round(prog, 4),
+                      "Manual (langkah 0,01)": round(man, 4), "Selisih": round(abs(prog - man), 4)})
+    return pd.DataFrame(baris), fz.sensitivitas()
+
+
 def fig_mf(var, nilai=None):
     lo, hi = fz.VAR[var]["semesta"]
     xs = np.linspace(lo, hi, 801)
@@ -98,7 +138,16 @@ st.title("🎓 SPK Kelayakan Penerima Beasiswa")
 st.caption("Logika Fuzzy metode Mamdani · AND = MIN · implikasi = MIN · agregasi = MAX · "
            "defuzzifikasi centroid (grid 0,5)")
 
-tab1, tab2, tab3 = st.tabs(["Hasil", "Fungsi keanggotaan", "Basis aturan"])
+with st.expander("Tentang sistem"):
+    st.markdown(
+        "- **Tujuan:** membantu panitia menilai kelayakan pendaftar beasiswa secara konsisten.\n"
+        "- **Pengguna:** panitia/admin seleksi beasiswa.\n"
+        "- **Makna skor (0–100):** makin tinggi makin layak. Skor adalah *rekomendasi* "
+        "pendukung keputusan, bukan keputusan akhir.\n"
+        "- **Keterbatasan:** parameter dan aturan ditetapkan secara subjektif; pengujian memakai data simulasi.")
+
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["Hasil", "Fungsi keanggotaan", "Basis aturan",
+                                        "Pengujian 24 data", "Validasi & sensitivitas"])
 
 with tab1:
     c1, c2, c3 = st.columns(3)
@@ -132,7 +181,7 @@ with tab1:
     st.subheader("3. Implikasi, agregasi, dan centroid")
     kiri, kanan = st.columns([3, 2])
     with kiri:
-        st.pyplot(fig_agregasi(hasil))
+        gambar(fig_agregasi(hasil))
     with kanan:
         st.markdown("**α maksimum per himpunan keluaran (pemotong)**")
         tampil(pd.DataFrame({"Himpunan": list(hasil["alpha_out"]),
@@ -140,8 +189,12 @@ with tab1:
         sm, szm = float(hasil["agg"].sum()), float((fz.Z * hasil["agg"]).sum())
         st.markdown(f"Σ μ(z) = **{sm:.3f}**  \nΣ z·μ(z) = **{szm:.3f}**  \n"
                     f"z* = Σ z·μ / Σ μ = **{szm / sm:.2f}**")
-        st.caption("Label = himpunan keluaran dengan derajat keanggotaan tertinggi pada z*. "
-                   "Batas: <27,5 Tidak layak; 27,5–52,5 Cukup layak; 52,5–75 Layak; ≥75 Sangat layak.")
+        st.caption("Label = himpunan keluaran dengan derajat tertinggi pada z* (seri → kategori lebih tinggi). "
+                   "Batas: <27,5 Tidak layak; 27,5–<52,5 Cukup layak; 52,5–<75 Layak; ≥75 Sangat layak.")
+    with st.expander("Tabel agregasi μ(z) tiap 5 poin"):
+        idx = [int(z / 0.5) for z in range(0, 101, 5)]
+        tampil(pd.DataFrame({"z": [float(fz.Z[i]) for i in idx],
+                             "μ agregasi": [round(float(hasil["agg"][i]), 4) for i in idx]}))
 
 with tab2:
     st.write("Garis hitam menunjukkan nilai masukan saat ini.")
@@ -150,9 +203,9 @@ with tab2:
     for i, v in enumerate(fz.INPUTS):
         with cols[i % 2]:
             st.markdown(f"**{LABEL[v]}**")
-            st.pyplot(fig_mf(v, nilai[v]))
+            gambar(fig_mf(v, nilai[v]))
     st.markdown("**Kelayakan beasiswa (keluaran)**")
-    st.pyplot(fig_mf("Kelayakan"))
+    gambar(fig_mf("Kelayakan"))
     st.markdown("**Parameter**")
     prm = []
     for v in [*fz.INPUTS, fz.OUTPUT]:
@@ -160,6 +213,12 @@ with tab2:
             prm.append({"Variabel": v, "Himpunan": h, "Bentuk": "Segitiga" if t == "tri" else "Trapesium",
                         "Parameter": str(tuple(p))})
     tampil(pd.DataFrame(prm))
+    st.markdown("**Persamaan**")
+    for v in [*fz.INPUTS, fz.OUTPUT]:
+        with st.expander(v):
+            for h, (t, p) in fz.VAR[v]["himpunan"].items():
+                st.markdown(f"*{h}*")
+                st.latex(persamaan(t, p))
 
 with tab3:
     st.write(f"Basis aturan faktorial lengkap 3×3×3×3 = {len(fz.RULES)} aturan. Poin = 3·IPK + 3·Penghasilan "
@@ -168,3 +227,27 @@ with tab3:
     df_r = pd.DataFrame(fz.RULES).rename(columns={"no": "No", "poin": "Poin", "out": "Kelayakan"})
     df_r["Aktif (α>0)"] = [round(a, 4) if a > 0 else None for a in hasil["alpha"]]
     tampil(df_r, height=500)
+
+with tab4:
+    df_u, cov = data_pengujian()
+    st.write("Data simulasi: kondisi ekstrem, titik batas, tumpang tindih, kontradiktif, dan umum.")
+    tampil(df_u)
+    st.bar_chart(df_u.set_index("ID")["Skor"])
+    st.markdown(f"**Cek cakupan aturan:** {cov['jumlah_titik']:,} kombinasi input diperiksa, "
+                f"**{cov['titik_tanpa_aturan']}** tanpa aturan aktif, "
+                f"α maksimum terkecil = **{cov['alpha_maks_terkecil']:.2f}**.")
+
+with tab5:
+    df_v, sens = data_validasi()
+    st.subheader("Validasi program vs perhitungan manual")
+    tampil(df_v)
+    st.caption("Selisih kecil berasal dari beda resolusi grid centroid (0,5 vs 0,01).")
+    st.subheader("Analisis sensitivitas")
+    st.write("Satu input diubah bertahap, input lain tetap: "
+             + ", ".join(f"{k} = {v}" for k, v in fz.BASE.items()) + ".")
+    cols = st.columns(2)
+    for i, v in enumerate(fz.INPUTS):
+        with cols[i % 2]:
+            st.markdown(f"**{LABEL[v]}**")
+            st.line_chart(pd.DataFrame({"Skor": sens[v]["skor"]},
+                                       index=pd.Index(sens[v]["nilai"], name=v)))
