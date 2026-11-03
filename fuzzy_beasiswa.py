@@ -33,12 +33,14 @@ OUTPUT = "Kelayakan"
 # 1. FUNGSI KEANGGOTAAN  (semua parameter ada di sini agar mudah diperiksa)
 #    ("tri", (a,b,c))      -> segitiga
 #    ("trap", (a,b,c,d))   -> trapesium (bahu kiri: a=b ; bahu kanan: c=d)
+#    Input memakai partisi Ruspini: himpunan bertetangga selalu berjumlah 1,
+#    berpotongan di mu = 0,5 -> tidak ada celah dan skor lebih monoton.
 # ----------------------------------------------------------------------------
 VAR = {
     "IPK": {
         "semesta": (0, 4), "satuan": "skala 0-4",
         "himpunan": {
-            "Rendah": ("trap", (0, 0, 2.25, 3.0)),
+            "Rendah": ("trap", (0, 0, 2.5, 3.0)),
             "Sedang": ("tri", (2.5, 3.0, 3.5)),
             "Tinggi": ("trap", (3.0, 3.5, 4.0, 4.0)),
         },
@@ -47,7 +49,7 @@ VAR = {
         "semesta": (0, 15), "satuan": "juta Rp/bulan",
         "himpunan": {
             "Rendah": ("trap", (0, 0, 2, 5)),
-            "Sedang": ("tri", (3, 6.5, 10)),
+            "Sedang": ("trap", (2, 5, 7, 10)),
             "Tinggi": ("trap", (7, 10, 15, 15)),
         },
     },
@@ -55,15 +57,15 @@ VAR = {
         "semesta": (0, 8), "satuan": "orang",
         "himpunan": {
             "Sedikit": ("trap", (0, 0, 1, 3)),
-            "Sedang": ("tri", (2, 4, 6)),
+            "Sedang": ("trap", (1, 3, 4, 6)),
             "Banyak": ("trap", (4, 6, 8, 8)),
         },
     },
     "Prestasi": {
         "semesta": (0, 100), "satuan": "skor 0-100",
         "himpunan": {
-            "Rendah": ("trap", (0, 0, 25, 50)),
-            "Sedang": ("tri", (30, 55, 80)),
+            "Rendah": ("trap", (0, 0, 30, 50)),
+            "Sedang": ("trap", (30, 50, 60, 80)),
             "Tinggi": ("trap", (60, 80, 100, 100)),
         },
     },
@@ -158,9 +160,11 @@ def alpha_aturan(fz):
 
 
 def label_keputusan(skor):
-    """Himpunan output dengan derajat keanggotaan tertinggi pada skor crisp."""
+    """Himpunan output dengan derajat tertinggi pada skor crisp.
+    Seri di titik silang (27,5 / 52,5 / 75) -> pilih kategori yang lebih tinggi."""
     derajat = {k: mu(OUTPUT, k, skor) for k in VAR[OUTPUT]["himpunan"]}
-    return max(derajat, key=derajat.get)
+    tertinggi = max(derajat.values())
+    return [k for k, d in derajat.items() if d >= tertinggi - 1e-9][-1]
 
 
 def infer(ipk, peng, tang, pres):
@@ -193,10 +197,10 @@ DATA = [
     ("M02", 0.00, 15.0, 0, 0, "Ekstrem", "Semua kriteria paling tidak mendukung"),
     ("M03", 4.00, 15.0, 0, 100, "Ekstrem", "Akademik maksimum, kebutuhan ekonomi minimum"),
     ("M04", 0.00, 0.0, 8, 0, "Ekstrem", "Akademik minimum, kebutuhan ekonomi maksimum"),
-    ("M05", 3.00, 5.0, 3, 50, "Titik batas", "Puncak IPK sedang; batas Penghasilan rendah; batas Tanggungan sedikit; batas Prestasi rendah"),
-    ("M06", 2.25, 2.0, 1, 25, "Titik batas", "Bahu IPK rendah, bahu Penghasilan rendah, bahu Tanggungan sedikit, bahu Prestasi rendah"),
-    ("M07", 3.50, 10.0, 6, 80, "Titik batas", "Awal bahu IPK tinggi; puncak Penghasilan sedang; awal Tanggungan banyak; Prestasi tinggi"),
-    ("M08", 2.50, 3.0, 2, 30, "Titik batas", "Kaki kiri IPK sedang; kaki kiri Penghasilan sedang; kaki kiri Tanggungan sedang; kaki kiri Prestasi sedang"),
+    ("M05", 3.00, 5.0, 3, 50, "Titik batas", "Puncak IPK sedang; awal inti Sedang pada Penghasilan, Tanggungan, Prestasi"),
+    ("M06", 2.50, 2.0, 1, 30, "Titik batas", "Ujung bahu Rendah/Sedikit di keempat variabel"),
+    ("M07", 3.50, 10.0, 6, 80, "Titik batas", "Awal bahu Tinggi/Banyak di keempat variabel"),
+    ("M08", 2.75, 3.5, 2, 40, "Titik batas", "Titik silang mu = 0,5 (Rendah/Sedang) di keempat variabel"),
     ("M09", 2.75, 4.0, 5, 40, "Tumpang tindih", "Beririsan di keempat variabel"),
     ("M10", 3.25, 8.0, 5, 70, "Tumpang tindih", "Beririsan di keempat variabel (contoh perhitungan lengkap)"),
     ("M11", 3.10, 6.5, 3.5, 55, "Tumpang tindih", "Mendekati nilai tengah di semua variabel"),
